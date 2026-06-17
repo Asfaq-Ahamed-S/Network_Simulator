@@ -19,6 +19,9 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import Sidebar from "./components/Sidebar"
+import DeviceNode from "./components/nodes/DeviceNode"
+
+const nodeTypes = { device: DeviceNode }
 
 const initialNodes = []
 const initialEdges = []
@@ -35,9 +38,11 @@ function App() {
   )
 
   const addNode = useCallback((type) => {
+    const id = nodeId++
     const newNode = {
-      id: `node-${nodeId++}`,
-      data: {label: `${type} ${nodeId - 1}`},
+      id: `node-${id}`,
+      type: 'device',
+      data: {label: `${type} ${id}`, deviceType: type},
       position: {x: Math.random()*400+100, y: Math.random() * 300 + 100}, 
     }
     setNodes((nds)=> [...nds, newNode])
@@ -53,11 +58,12 @@ function App() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          nodeTypes={nodeTypes}
           fitView
         >
           <MiniMap />
           <Controls />
-          <Background color="#444" gap={16} />
+          <Background color="#290392ff" gap={16} />
         </ReactFlow>
       </div>
     </div>

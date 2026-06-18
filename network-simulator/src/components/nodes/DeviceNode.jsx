@@ -74,6 +74,12 @@ function DeviceNode({ data }) {
       <div className="text-white text-xs mt-1 bg-gray-900 bg-opacity-80 px-2 py-0.5 rounded font-mono">
         {data.label}
       </div>
+      {data.ip && (
+        <div className='text-xs px-2 py-0.5 rounded font-mono'
+        style={{color: "#4a9eff", background: '#4a9eff11', border:'1px solid #4a9eff44'}}>
+          {data.ip}
+        </div>
+      )}
       <Handle type="source" position={Position.Bottom} />
     </div>
   )

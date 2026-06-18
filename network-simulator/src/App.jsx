@@ -22,22 +22,37 @@ import Sidebar from "./components/Sidebar"
 import DeviceNode from "./components/nodes/DeviceNode"
 import ContextMenu from "./components/ContextMenu"
 import PropertiesPanel from "./components/PropertiesPanel"
+import ConnectionModal from "./components/ConnectionModal"
+import CustomEdge from "./components/edges/CustomEdge"
 
 const nodeTypes = { device: DeviceNode }
+const edgeTypes = { custom: CustomEdge }
 const initialNodes = []
 const initialEdges = []
 let nodeId = 1
+let edgeId = 1
 
 function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const [menu, setMenu] = useState(null)
   const [selectedNode, setSelectedNode] = useState(null)
+  const [pendingConnection, setPendingConnection] = useState(null)
 
   const onConnect = useCallback(
-    (params) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
+    (params) => { setPendingConnection(params) },[]
   )
+
+  const handleConfirmConnection = useCallback(({ cableType, speed }) =>{
+    if(!pendingConnection) return
+    setEdges((eds)=> addEdge({
+      ...pendingConnection,
+      id: `edge-$edgeId++`,
+      type: 'custom',
+      data: {cableType, speed},
+    }, eds))
+    setPendingConnection(null)
+  }, [pendingConnection, setEdges])
 
   const addNode = useCallback((type) => {
     const id = nodeId++
@@ -100,6 +115,7 @@ function App() {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           onNodeClick={onNodeClick}
           onNodeContextMenu={onNodeContextMenu}
           onEdgeContextMenu={onEdgeContextMenu}
@@ -115,6 +131,12 @@ function App() {
           <PropertiesPanel node={selectedNode} onClose={()=> setSelectedNode(null)} onUpdate={handleUpdateNode} />
         )}
       </div>
+
+      {pendingConnection && (
+        <ConnectionModal onConfirm={handleConfirmConnection} onCancel={
+          ()=> setPendingConnection(null)
+        } />
+      )}
       {menu && (
         <ContextMenu
           x={menu.x}

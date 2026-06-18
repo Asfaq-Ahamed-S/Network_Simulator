@@ -7,7 +7,7 @@
 }
 */
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect } from "react"
 import ReactFlow, {
   addEdge,
   MiniMap,
@@ -24,6 +24,8 @@ import ContextMenu from "./components/ContextMenu"
 import PropertiesPanel from "./components/PropertiesPanel"
 import ConnectionModal from "./components/ConnectionModal"
 import CustomEdge from "./components/edges/CustomEdge"
+import PingPanel from "./components/PingPanel"
+import { findPath } from "./utils/pathfinder"
 
 const nodeTypes = { device: DeviceNode }
 const edgeTypes = { custom: CustomEdge }
@@ -39,6 +41,70 @@ function App() {
   const [selectedNode, setSelectedNode] = useState(null)
   const [pendingConnection, setPendingConnection] = useState(null)
 
+  //Ping state
+  const [pingMode, setPingMode] = useState(false)
+  const [pingSource, setPingSource] = useState(null)
+  const [pingLogs, setPingLogs] = useState([])
+  const [showPingPanel, setShowPingPanel] = useState(false)
+  const [animatingEdgeIds, setAnimatingEdgeIds] = useState([])
+
+  //Apply animation to edges
+  useEffect(() => {
+    setEdges(eds => eds.map(e=>({
+      ...e,
+      animated: animatingEdgeIds.includes(e.id),
+    })))
+  },[animatingEdgeIds])
+
+  const executePing = useCallback((source, target) => {
+    const path = findPath(nodes, edges, source.id, target.id)
+    const targetLabel = target.data.ip || target.data.label
+
+    setPingLogs(prev => [
+      ...prev,
+      {type: 'info', text: `Target: ${target.data.label}${target.data.ip ? `(${target.data.ip})` : ''}`},
+      {type: 'gray', text: `Pinging ${targetLabel} with 32 bytes of data:` },
+    ])
+
+    if (!path) {
+      setTimeout(() => setPingLogs(prev => [...prev,
+        {type: 'error', text: 'Requested timed out.'},
+        {type: 'error', text: 'Requested timed out.'},
+        {type: 'error', text: 'Requested timed out.'},
+        {type: 'gray', text: ''},
+        {type: 'error', text: `Ping statistics for ${targetLabel}:`},
+        {type: 'error', text: '     Packets: Sent = 3, Recieved = 0, Lost = 3 (100% loss)'},
+      ]), 1000)
+      return
+    }
+
+    const pathIds = path.map(e => e.id)
+    setAnimatingEdgeIds(pathIds)
+
+    const r = () => Math.floor(Math.random()*6) + 1
+    const [t1, t2, t3] = [r(), r(), r()]
+
+    setTimeout(() => setPingLogs(prev => [...prev,
+      {type: 'success', text: `Reply from ${targetLabel}: bytes=32 time=${t1}ms TTL=128`}
+    ]),900)
+    setTimeout(() => setPingLogs(prev => [...prev,
+      {type: 'success', text: `Reply from ${targetLabel}: bytes=32 time=${t2}ms TTL=128`}
+    ]),1800)
+    setTimeout(() => setPingLogs(prev => [...prev,
+      {type: 'success', text: `Reply from ${targetLabel}: bytes=32 time=${t3}ms TTL=128`}
+    ]),2700)
+    setTimeout(()=>{
+      setPingLogs(prev => [...prev,
+        {type: 'gray', text: ''},
+        {type: 'gray', text: `Ping statistics for ${targetLabel}:`},
+        {type: 'gray', text: '    Packets: Sent = 3, Received = 3, Lost = 0 (0% loss)'},
+        {type: 'success', text: `Approximate round trip: min=${Math.min(t1,t2,t3)}ms max=${Math.max(t1,t2,t3)}ms avg=${Math.round((t1+t2+t3)/3)}ms`},
+      ])
+      setAnimatingEdgeIds([])
+      setPingSource(null)
+    }, 3500)
+  }, [nodes, edges])
+
   const onConnect = useCallback(
     (params) => { setPendingConnection(params) },[]
   )
@@ -47,7 +113,7 @@ function App() {
     if(!pendingConnection) return
     setEdges((eds)=> addEdge({
       ...pendingConnection,
-      id: `edge-$edgeId++`,
+      id: `edge-${edgeId++}`,
       type: 'custom',
       data: {cableType, speed},
     }, eds))
@@ -66,13 +132,37 @@ function App() {
   },[setNodes])
 
   const onNodeClick = useCallback((event, node) => {
+    if (pingMode) {
+      if (!pingSource) {
+        setPingSource(node)
+        setShowPingPanel(true)
+        setPingLogs([
+          {type: 'info', text: `Source: ${node.data.label}${node.data.ip ? `(${node.data.ip})` : ''}`},
+          {type: 'gray', text: 'Now click the target node...'},
+        ])
+      } else if (pingSource.id !== node.id) {
+        executePing(pingSource, node)
+      }
+      return
+    }
     setSelectedNode(node)
-  },[])
+  },[pingMode, pingSource, executePing])
+
+  const onTogglePing = useCallback(() => {
+    setPingMode(p => !p)
+    setPingSource(null)
+    setAnimatingEdgeIds([])
+    if (!pingMode) {
+      setShowPingPanel(true)
+      setPingLogs([])
+      setSelectedNode(null)
+    }
+  },[pingMode])
 
   const onPanelClick = useCallback(()=>{
     setMenu(null)
-    setSelectedNode(null)
-  },[])
+    if (!pingMode) setSelectedNode(null)
+  },[pingMode])
 
   const handleUpdateNode = useCallback((id, newData)=>{
     setNodes((nds)=> nds.map((n)=> (n.id === id ? {...n, data: newData} :n))
@@ -106,7 +196,7 @@ function App() {
 
   return (
     <div className="flex w-screen h-screen bg-gray-900">
-      <Sidebar onAddNode={addNode} />
+      <Sidebar onAddNode={addNode} pingMode={pingMode} onTogglePing={onTogglePing} />
       <div className="flex-1 relative">
         <ReactFlow 
           nodes={nodes}
@@ -127,8 +217,19 @@ function App() {
           <Background color="#290392ff" gap={16} />
         </ReactFlow>
 
-        {selectedNode && (
+        {selectedNode && !pingMode && (
           <PropertiesPanel node={selectedNode} onClose={()=> setSelectedNode(null)} onUpdate={handleUpdateNode} />
+        )}
+
+        {showPingPanel && (
+          <PingPanel
+          logs={pingLogs}
+          onClose={()=> {
+            setShowPingPanel(false)
+            setPingLogs([])
+            setPingSource(null)
+            setAnimatingEdgeIds([])
+          }} />
         )}
       </div>
 

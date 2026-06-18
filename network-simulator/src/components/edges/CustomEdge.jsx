@@ -10,7 +10,7 @@ const cableStyles = {
   'Serial':   { color: '#ff5722', width: 2,   dash: '6,6', glow: false },
 }
 
-function CustomEdge({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd }) {
+function CustomEdge({ sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition, data, markerEnd, animated }) {
   const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX, sourceY, sourcePosition,
     targetX, targetY, targetPosition,
@@ -35,10 +35,16 @@ function CustomEdge({ sourceX, sourceY, targetX, targetY, sourcePosition, target
         markerEnd={markerEnd}
         style={{
           stroke: style.color,
-          strokeWidth: style.width,
+          strokeWidth: animated ? style.width + 1 : style.width,
           strokeDasharray: style.dash || undefined,
+          filter: animated ? `drop-shadow(0 0 4px ${style.color})` : undefined,
         }}
       />
+      {animated && (
+        <circle r="5" fill={style.color} style={{ filter: `drop-shadow(0 0 6px ${style.color})` }}>
+          <animateMotion dur="0.8s" repeatCount="indefinite" path={edgePath} />
+        </circle>
+      )}
       <EdgeLabelRenderer>
         <div
           style={{

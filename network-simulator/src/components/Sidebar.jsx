@@ -3,6 +3,13 @@ const deviceTypes = [
     {type: 'Router', label: 'Router'},
     {type: 'Switch', label: 'Switch'},
     {type: 'Hub', label: 'Hub'},
+    {type: 'Firewall', label:'Firewall'},
+    {type: 'Server', label:'Server'},
+    {type: 'IDS', label:'IDS'},
+    {type: 'WAF', label:'WAF'},
+    {type: 'AccessPoint', label:'AccessPoint'},
+    {type: 'Cloud', label:'Cloud'},
+    {type: 'VPN', label:'VPN'},
 ]
 
 function Sidebar({ onAddNode, pingMode, onTogglePing }) {

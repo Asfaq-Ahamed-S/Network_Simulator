@@ -62,6 +62,164 @@ const deviceSVGs = {
       })}
     </svg>
   ),
+  
+  Firewall: (
+  <svg viewBox="0 0 80 75" width="80" height="75">
+    {/* Brick wall — standard FW icon, row 1 */}
+    <rect x="5"  y="8"  width="32" height="14" rx="2" fill="#1f0808" stroke="#ef4444" strokeWidth="1.5"/>
+    <rect x="41" y="8"  width="34" height="14" rx="2" fill="#1f0808" stroke="#ef4444" strokeWidth="1.5"/>
+    {/* Row 2 — offset */}
+    <rect x="5"  y="25" width="14" height="14" rx="2" fill="#1f0808" stroke="#ef4444" strokeWidth="1.5"/>
+    <rect x="23" y="25" width="32" height="14" rx="2" fill="#1f0808" stroke="#ef4444" strokeWidth="1.5"/>
+    <rect x="59" y="25" width="16" height="14" rx="2" fill="#1f0808" stroke="#ef4444" strokeWidth="1.5"/>
+    {/* Row 3 */}
+    <rect x="5"  y="42" width="32" height="14" rx="2" fill="#1f0808" stroke="#ef4444" strokeWidth="1.5"/>
+    <rect x="41" y="42" width="34" height="14" rx="2" fill="#1f0808" stroke="#ef4444" strokeWidth="1.5"/>
+    {/* Status dots */}
+    <circle cx="20" cy="63" r="2" fill="#ef4444" opacity="0.7"/>
+    <circle cx="40" cy="63" r="2" fill="#ef4444" opacity="0.5"/>
+    <circle cx="60" cy="63" r="2" fill="#ef4444" opacity="0.3"/>
+  </svg>
+),
+
+Server: (
+  <svg viewBox="0 0 80 75" width="80" height="75">
+    {/* Rack Unit 1 */}
+    <rect x="5" y="5"  width="70" height="18" rx="2" fill="#071a19" stroke="#14b8a6" strokeWidth="1.5"/>
+    <rect x="10" y="9" width="18" height="10" rx="1" fill="#0a2422"/>
+    <rect x="31" y="9" width="18" height="10" rx="1" fill="#0a2422"/>
+    <circle cx="63" cy="11" r="2.5" fill="#14b8a6" opacity="0.9"/>
+    <circle cx="70" cy="11" r="2.5" fill="#14b8a6" opacity="0.35"/>
+    <rect x="58" y="16" width="15" height="4" rx="1" fill="#071a19" stroke="#14b8a6" strokeWidth="0.8"/>
+    {/* Rack Unit 2 */}
+    <rect x="5" y="28" width="70" height="18" rx="2" fill="#071a19" stroke="#14b8a6" strokeWidth="1.5"/>
+    <rect x="10" y="32" width="18" height="10" rx="1" fill="#0a2422"/>
+    <rect x="31" y="32" width="18" height="10" rx="1" fill="#0a2422"/>
+    <circle cx="63" cy="34" r="2.5" fill="#14b8a6" opacity="0.9"/>
+    <circle cx="70" cy="34" r="2.5" fill="#14b8a6" opacity="0.35"/>
+    <rect x="58" y="39" width="15" height="4" rx="1" fill="#071a19" stroke="#14b8a6" strokeWidth="0.8"/>
+    {/* Rack Unit 3 */}
+    <rect x="5" y="51" width="70" height="18" rx="2" fill="#071a19" stroke="#14b8a6" strokeWidth="1.5"/>
+    <rect x="10" y="55" width="18" height="10" rx="1" fill="#0a2422"/>
+    <rect x="31" y="55" width="18" height="10" rx="1" fill="#0a2422"/>
+    <circle cx="63" cy="57" r="2.5" fill="#14b8a6" opacity="0.9"/>
+    <circle cx="70" cy="57" r="2.5" fill="#14b8a6" opacity="0.35"/>
+    <rect x="58" y="62" width="15" height="4" rx="1" fill="#071a19" stroke="#14b8a6" strokeWidth="0.8"/>
+  </svg>
+),
+
+IDS: (
+  <svg viewBox="0 0 80 75" width="80" height="75">
+    {/* Appliance body */}
+    <rect x="5" y="15" width="70" height="48" rx="3" fill="#1a1100" stroke="#f59e0b" strokeWidth="1.5"/>
+    {/* Eye outer */}
+    <ellipse cx="36" cy="39" rx="22" ry="13" fill="#0d0900" stroke="#f59e0b" strokeWidth="1.5"/>
+    {/* Iris */}
+    <circle cx="36" cy="39" r="9"   fill="#1a1100" stroke="#f59e0b" strokeWidth="1.5"/>
+    {/* Pupil glow */}
+    <circle cx="36" cy="39" r="5"   fill="#f59e0b" opacity="0.25"/>
+    <circle cx="36" cy="39" r="2.5" fill="#f59e0b" opacity="0.9"/>
+    {/* Glint */}
+    <circle cx="38.5" cy="37" r="1.2" fill="white" opacity="0.7"/>
+    {/* Scan lines */}
+    <line x1="5"  y1="39" x2="14" y2="39" stroke="#f59e0b" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.8"/>
+    <line x1="58" y1="39" x2="75" y2="39" stroke="#f59e0b" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.8"/>
+    {/* Ports */}
+    <rect x="10" y="53" width="11" height="6" rx="1" fill="#0d0900" stroke="#f59e0b" strokeWidth="1"/>
+    <rect x="24" y="53" width="11" height="6" rx="1" fill="#0d0900" stroke="#f59e0b" strokeWidth="1"/>
+    {/* LEDs */}
+    <circle cx="63" cy="21" r="3" fill="#f59e0b" opacity="0.9"/>
+    <circle cx="71" cy="21" r="3" fill="#f59e0b" opacity="0.3"/>
+  </svg>
+),
+
+WAF: (
+  <svg viewBox="0 0 80 75" width="80" height="75">
+    {/* Appliance body */}
+    <rect x="5" y="8" width="70" height="60" rx="3" fill="#1a0011" stroke="#ec4899" strokeWidth="1.5"/>
+    {/* Globe */}
+    <circle cx="37" cy="37" r="22" fill="#0d0009" stroke="#ec4899" strokeWidth="1.5"/>
+    {/* Latitude lines */}
+    <line x1="15" y1="37" x2="59" y2="37" stroke="#ec4899" strokeWidth="1"   opacity="0.7"/>
+    <line x1="17" y1="27" x2="57" y2="27" stroke="#ec4899" strokeWidth="1"   opacity="0.5"/>
+    <line x1="17" y1="47" x2="57" y2="47" stroke="#ec4899" strokeWidth="1"   opacity="0.5"/>
+    {/* Longitude ellipses */}
+    <ellipse cx="37" cy="37" rx="8"  ry="22" fill="none" stroke="#ec4899" strokeWidth="1" opacity="0.7"/>
+    <ellipse cx="37" cy="37" rx="16" ry="22" fill="none" stroke="#ec4899" strokeWidth="1" opacity="0.4"/>
+    {/* Ports */}
+    <rect x="10" y="58" width="11" height="6" rx="1" fill="#0d0009" stroke="#ec4899" strokeWidth="1"/>
+    <rect x="24" y="58" width="11" height="6" rx="1" fill="#0d0009" stroke="#ec4899" strokeWidth="1"/>
+    {/* LEDs */}
+    <circle cx="63" cy="14" r="3" fill="#ec4899" opacity="0.9"/>
+    <circle cx="71" cy="14" r="3" fill="#ec4899" opacity="0.3"/>
+  </svg>
+),
+
+AccessPoint: (
+  <svg viewBox="0 0 80 75" width="80" height="75">
+    {/* Left antenna */}
+    <line x1="24" y1="52" x2="15" y2="8"  stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round"/>
+    <circle cx="15" cy="6" r="3.5" fill="#0ea5e9" opacity="0.9"/>
+    {/* Right antenna */}
+    <line x1="56" y1="52" x2="65" y2="8"  stroke="#0ea5e9" strokeWidth="2.5" strokeLinecap="round"/>
+    <circle cx="65" cy="6" r="3.5" fill="#0ea5e9" opacity="0.9"/>
+    {/* Disc outer */}
+    <ellipse cx="40" cy="62" rx="34" ry="12" fill="#041520" stroke="#0ea5e9" strokeWidth="1.5"/>
+    {/* Disc middle ring */}
+    <ellipse cx="40" cy="62" rx="22" ry="7.5" fill="#062030" stroke="#0ea5e9" strokeWidth="1" opacity="0.7"/>
+    {/* Disc inner ring */}
+    <ellipse cx="40" cy="62" rx="10" ry="4"   fill="#083040" stroke="#0ea5e9" strokeWidth="1" opacity="0.5"/>
+    {/* Center LED */}
+    <circle cx="40" cy="62" r="3.5" fill="#0ea5e9" opacity="0.9"/>
+    <circle cx="40" cy="62" r="1.5" fill="white"   opacity="0.6"/>
+  </svg>
+),
+
+Cloud: (
+  <svg viewBox="0 0 80 75" width="80" height="75">
+    {/* Cloud blob */}
+    <path d="M14 62 A16 16 0 0 1 14 30 A13 13 0 0 1 28 18 A20 20 0 0 1 68 34 A15 15 0 0 1 70 62 Z"
+      fill="#141820" stroke="#94a3b8" strokeWidth="1.5"/>
+    {/* Inner contour */}
+    <path d="M20 55 A11 11 0 0 1 20 35 A9 9 0 0 1 31 26 A14 14 0 0 1 62 39 A10 10 0 0 1 63 55 Z"
+      fill="none" stroke="#94a3b8" strokeWidth="0.7" opacity="0.35"/>
+    {/* Connection stubs */}
+    <line x1="28" y1="62" x2="22" y2="72" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round"/>
+    <line x1="42" y1="62" x2="42" y2="72" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round"/>
+    <line x1="56" y1="62" x2="62" y2="72" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round"/>
+    {/* Status glows */}
+    <circle cx="55" cy="36" r="3" fill="#94a3b8" opacity="0.5"/>
+    <circle cx="63" cy="44" r="2" fill="#94a3b8" opacity="0.3"/>
+  </svg>
+),
+
+VPN: (
+  <svg viewBox="0 0 80 75" width="80" height="75">
+    {/* Left antenna */}
+    <line x1="22" y1="30" x2="14" y2="8"  stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round"/>
+    <circle cx="14" cy="6" r="3.5" fill="#6366f1" opacity="0.9"/>
+    {/* Right antenna */}
+    <line x1="58" y1="30" x2="66" y2="8"  stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round"/>
+    <circle cx="66" cy="6" r="3.5" fill="#6366f1" opacity="0.9"/>
+    {/* Router body */}
+    <rect x="5" y="30" width="70" height="40" rx="3" fill="#08082a" stroke="#6366f1" strokeWidth="1.5"/>
+    {/* Left ports */}
+    <rect x="10" y="38" width="13" height="9" rx="1" fill="#050520" stroke="#6366f1" strokeWidth="1"/>
+    <rect x="26" y="38" width="13" height="9" rx="1" fill="#050520" stroke="#6366f1" strokeWidth="1"/>
+    {/* Lock badge */}
+    <rect x="44" y="34" width="27" height="28" rx="2.5" fill="#10103a" stroke="#6366f1" strokeWidth="1.5"/>
+    {/* Shackle */}
+    <path d="M51 34 L51 27 C51 20 64 20 64 27 L64 34"
+      fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round"/>
+    {/* Keyhole */}
+    <circle cx="57.5" cy="45" r="5.5" fill="#08082a" stroke="#6366f1" strokeWidth="1.5"/>
+    <circle cx="57.5" cy="45" r="2.5" fill="#6366f1" opacity="0.5"/>
+    <line x1="57.5" y1="47.5" x2="57.5" y2="53" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round"/>
+    {/* LEDs */}
+    <circle cx="12" cy="60" r="2.5" fill="#6366f1" opacity="0.9"/>
+    <circle cx="19" cy="60" r="2.5" fill="#6366f1" opacity="0.35"/>
+  </svg>
+),
 }
 
 function DeviceNode({ data }) {

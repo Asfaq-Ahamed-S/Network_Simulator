@@ -26,6 +26,8 @@ import ConnectionModal from "./components/ConnectionModal"
 import CustomEdge from "./components/edges/CustomEdge"
 import PingPanel from "./components/PingPanel"
 import { findPath } from "./utils/pathfinder"
+import { checkConnection } from "./utils/connectionRules"
+import Toast from "./components/Toast"
 
 const nodeTypes = { device: DeviceNode }
 const edgeTypes = { custom: CustomEdge }
@@ -40,6 +42,8 @@ function App() {
   const [menu, setMenu] = useState(null)
   const [selectedNode, setSelectedNode] = useState(null)
   const [pendingConnection, setPendingConnection] = useState(null)
+  const [toast, setToast] = useState(null)
+  const [showConnectionModal, setShowConnectionModal] = useState(false)
 
   //Ping state
   const [pingMode, setPingMode] = useState(false)
@@ -105,8 +109,27 @@ function App() {
     }, 3500)
   }, [nodes, edges])
 
-  const onConnect = useCallback(
-    (params) => { setPendingConnection(params) },[]
+  const onConnect = useCallback((params) => {
+    const sourceNode = nodes.find(n => n.id === params.source)
+    const targetNode = nodes.find(n => n.id === params.target)
+
+    if (!sourceNode || !targetNode) return
+
+    const rule = checkConnection(sourceNode.data.deviceType, targetNode.data.deviceType)
+    console.log('source type:', sourceNode.data.deviceType)
+    console.log('target type:', targetNode.data.deviceType)
+    console.log('rule:',rule)
+    console.log('sourceNode.data:',sourceNode.data)
+
+    if (rule.status === 'block') {
+      setToast({type: 'block', message: rule.message})
+      return
+    }
+    if (rule.status === 'warn') {
+      setToast({type: 'warn', message: rule.message})
+    }
+    setPendingConnection(params)
+  },[nodes]
   )
 
   const handleConfirmConnection = useCallback(({ cableType, speed }) =>{
@@ -216,6 +239,8 @@ function App() {
           <Controls />
           <Background color="#290392ff" gap={16} />
         </ReactFlow>
+
+        <Toast toast={toast} onClose={()=> setToast(null)} />
 
         {selectedNode && !pingMode && (
           <PropertiesPanel node={selectedNode} onClose={()=> setSelectedNode(null)} onUpdate={handleUpdateNode} />

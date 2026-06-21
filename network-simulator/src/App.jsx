@@ -242,10 +242,6 @@ function App() {
 
         <Toast toast={toast} onClose={()=> setToast(null)} />
 
-        {selectedNode && !pingMode && (
-          <PropertiesPanel node={selectedNode} onClose={()=> setSelectedNode(null)} onUpdate={handleUpdateNode} />
-        )}
-
         {showPingPanel && (
           <PingPanel
           logs={pingLogs}
@@ -257,6 +253,10 @@ function App() {
           }} />
         )}
       </div>
+
+      {selectedNode && !pingMode && (
+        <PropertiesPanel node={selectedNode} onClose={()=> setSelectedNode(null)} onUpdate={handleUpdateNode} />
+      )}
 
       {pendingConnection && (
         <ConnectionModal onConfirm={handleConfirmConnection} onCancel={

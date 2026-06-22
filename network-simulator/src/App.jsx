@@ -28,6 +28,7 @@ import PingPanel from "./components/PingPanel"
 import { findPath } from "./utils/pathfinder"
 import { checkConnection } from "./utils/connectionRules"
 import Toast from "./components/Toast"
+import { initNetworkState } from "./utils/networkLayer"
 
 const nodeTypes = { device: DeviceNode }
 const edgeTypes = { custom: CustomEdge }
@@ -43,7 +44,7 @@ function App() {
   const [selectedNode, setSelectedNode] = useState(null)
   const [pendingConnection, setPendingConnection] = useState(null)
   const [toast, setToast] = useState(null)
-  const [showConnectionModal, setShowConnectionModal] = useState(false)
+  const [networkState, setNetworkState] = useState(null)
 
   //Ping state
   const [pingMode, setPingMode] = useState(false)
@@ -59,6 +60,12 @@ function App() {
       animated: animatingEdgeIds.includes(e.id),
     })))
   },[animatingEdgeIds])
+
+  useEffect(()=> {
+    const state = initNetworkState(nodes, edges)
+    setNetworkState(state)
+    console.log('networkState:', state)
+  },[nodes, edges])
 
   const executePing = useCallback((source, target) => {
     const path = findPath(nodes, edges, source.id, target.id)
@@ -128,7 +135,6 @@ function App() {
     if (rule.status === 'warn') {
       setToast({type: 'warn', message: rule.message})
     }
-    setPendingConnection(params)
   },[nodes]
   )
 
@@ -148,7 +154,12 @@ function App() {
     const newNode = {
       id: `node-${id}`,
       type: 'device',
-      data: {label: `${type} ${id}`, deviceType: type, ip: ''},
+      data: {
+        label: `${type} ${id}`,
+        deviceType: type,
+        ip: '',
+        ...(type === 'Server' ? { ports: [], ipMode: 'static' } : {}),
+      },
       position: {x: Math.random()*400+100, y: Math.random() * 300 + 100}, 
     }
     setNodes((nds)=> [...nds, newNode])
@@ -232,7 +243,7 @@ function App() {
           onNodeClick={onNodeClick}
           onNodeContextMenu={onNodeContextMenu}
           onEdgeContextMenu={onEdgeContextMenu}
-          onPanelClick={onPanelClick}
+          onPaneClick={onPanelClick}
           fitView
         >
           <MiniMap />
@@ -255,7 +266,7 @@ function App() {
       </div>
 
       {selectedNode && !pingMode && (
-        <PropertiesPanel node={selectedNode} onClose={()=> setSelectedNode(null)} onUpdate={handleUpdateNode} />
+        <PropertiesPanel node={selectedNode} onClose={()=> setSelectedNode(null)} onUpdate={handleUpdateNode} networkState={networkState} />
       )}
 
       {pendingConnection && (

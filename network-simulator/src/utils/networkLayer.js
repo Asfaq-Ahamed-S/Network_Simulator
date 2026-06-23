@@ -2,6 +2,7 @@
 //  NETWORKSIM — utils/networkLayer.js
 //  Phase 3: Network Realism Layer
 //  Covers: MAC · DHCP/APIPA/Static · ARP · DNS · VLAN · Routing · Protocols · STP
+//  + CAM table (Switch only) · per-device ARP cache
 // ============================================================
 
 
@@ -43,7 +44,6 @@ export function generateAPIPA(nodeId) {
     hash |= 0;
   }
   hash = hash >>> 0;
-  // RFC 3927: 169.254.1.0 – 169.254.254.255  (avoid .0.x and .255.x)
   const third  = 1 + (hash % 254);
   const fourth = 1 + ((hash >>> 8) % 254);
   return `169.254.${third}.${fourth}`;
@@ -61,22 +61,19 @@ export function assignIP(node, dhcpState) {
     return allocateDHCPLease(node.id, dhcpState);
   }
 
-  // explicit 'apipa' or anything else
   return generateAPIPA(node.id);
 }
 
 
 // ── 3. DHCP STATE ────────────────────────────────────────────────────────────
-//  Simple sequential allocator.  One DHCP server per logical network.
-//  Falls back to APIPA when pool is exhausted.
 
 export function createDHCPState(subnet = '192.168.1', start = 100, end = 200) {
   return {
-    subnet,        // e.g. '192.168.1'  (first three octets)
-    start,         // first leasable host octet
-    end,           // last leasable host octet
+    subnet,
+    start,
+    end,
     nextAvailable: start,
-    leases: {},    // nodeId → IP string
+    leases: {},
   };
 }
 
@@ -84,7 +81,6 @@ export function allocateDHCPLease(nodeId, dhcpState) {
   if (dhcpState.leases[nodeId]) return dhcpState.leases[nodeId];
 
   if (dhcpState.nextAvailable > dhcpState.end) {
-    // Pool exhausted → APIPA fallback
     return generateAPIPA(nodeId);
   }
 
@@ -96,7 +92,6 @@ export function allocateDHCPLease(nodeId, dhcpState) {
 
 export function releaseDHCPLease(nodeId, dhcpState) {
   delete dhcpState.leases[nodeId];
-  // Note: simple allocator doesn't reclaim the slot — good enough for simulation.
 }
 
 export function isDHCPExhausted(dhcpState) {
@@ -104,13 +99,13 @@ export function isDHCPExhausted(dhcpState) {
 }
 
 
-// ── 4. ARP TABLE ─────────────────────────────────────────────────────────────
-//  Maps IP → { mac, nodeId }.
-//  In real networks ARP is per-device; here we keep a global table
-//  (simulates a fully resolved cache across the topology).
+// ── 4. ARP TABLE (global — used by ping/pathfinder) ──────────────────────────
+//  Maps IP → { mac, nodeId, label }.
+//  Represents a fully-resolved cache across the whole topology.
+//  Per-device ARP caches (realistic, neighbor-only) are built separately below.
 
 export function buildARPTable(nodes, ipMap) {
-  const arp = new Map(); // IP → { mac, nodeId, label }
+  const arp = new Map();
   for (const node of nodes) {
     const ip = ipMap[node.id];
     if (!ip) continue;
@@ -135,10 +130,129 @@ export function arpLookupByMAC(mac, arpTable) {
 }
 
 
-// ── 5. DNS ────────────────────────────────────────────────────────────────────
-//  hostname → IP (forward lookup)
-//  IP → hostname (reverse lookup / PTR)
-//  Hostname derived from node label, lowercased, spaces→hyphens.
+// ── 4b. PER-DEVICE ARP CACHE ─────────────────────────────────────────────────
+//  Each IP-capable device only learns MACs of its directly connected neighbors.
+//  This is how real ARP works: you only cache what you've talked to.
+//
+//  arpCaches: { [nodeId]: Map<IP, { mac, neighborId }> }
+
+const IP_CAPABLE_TYPES = new Set([
+  'pc', 'server', 'router', 'firewall', 'ap', 'vpn', 'cloud', 'ids', 'waf',
+]);
+
+/**
+ * Build the ARP cache for a single IP-capable node.
+ * Scans every edge attached to the node, resolves the neighbor's IP + MAC,
+ * and stores the mapping.
+ */
+export function buildARPCache(node, edges, nodes, ipMap, macMap) {
+  const cache = new Map(); // IP → { mac, neighborId, label }
+
+  const attachedEdges = edges.filter(
+    e => e.source === node.id || e.target === node.id
+  );
+
+  for (const edge of attachedEdges) {
+    const neighborId = edge.source === node.id ? edge.target : edge.source;
+    const neighbor   = nodes.find(n => n.id === neighborId);
+    if (!neighbor) continue;
+
+    const ip  = ipMap[neighborId];
+    const mac = macMap[neighborId];
+    if (!ip || !mac) continue;
+
+    cache.set(ip, {
+      mac,
+      neighborId,
+      label: neighbor.data?.label || neighborId,
+    });
+  }
+
+  return cache;
+}
+
+/**
+ * Build ARP caches for all IP-capable nodes in the topology.
+ * Returns { [nodeId]: Map<IP, { mac, neighborId, label }> }
+ */
+export function buildAllARPCaches(nodes, edges, ipMap, macMap) {
+  const caches = {};
+  for (const node of nodes) {
+    const t = node.data?.deviceType?.toLowerCase();
+    if (IP_CAPABLE_TYPES.has(t)) {
+      caches[node.id] = buildARPCache(node, edges, nodes, ipMap, macMap);
+    }
+  }
+  return caches;
+}
+
+
+// ── 5. CAM TABLE (Switch nodes only) ────────────────────────────────────────
+//  Content-Addressable Memory: MAC → { port, neighborId }
+//  In a real switch, the CAM table is learned dynamically when frames arrive.
+//  Here we pre-populate it from the topology (each edge = one port).
+//
+//  port: edge.id — uniquely identifies which physical port the MAC is reachable on.
+//
+//  camTables: { [switchId]: Map<MAC, { port, neighborId, label }> }
+
+const SWITCH_TYPES = new Set(['switch', 'managedswitch']);
+
+/**
+ * Build the CAM table for a single switch node.
+ * Every directly connected neighbor gets one MAC→port entry.
+ */
+export function buildCAMTable(switchNode, edges, nodes, macMap) {
+  const cam = new Map(); // MAC → { port, neighborId, label }
+
+  const attachedEdges = edges.filter(
+    e => e.source === switchNode.id || e.target === switchNode.id
+  );
+
+  for (const edge of attachedEdges) {
+    const neighborId = edge.source === switchNode.id ? edge.target : edge.source;
+    const neighbor   = nodes.find(n => n.id === neighborId);
+    if (!neighbor) continue;
+
+    const mac = macMap[neighborId];
+    if (!mac) continue;
+
+    cam.set(mac, {
+      port:       edge.id,   // edge ID acts as the port identifier
+      neighborId,
+      label:      neighbor.data?.label || neighborId,
+    });
+  }
+
+  return cam;
+}
+
+/**
+ * Build CAM tables for all switch nodes in the topology.
+ * Returns { [switchId]: Map<MAC, { port, neighborId, label }> }
+ */
+export function buildAllCAMTables(nodes, edges, macMap) {
+  const tables = {};
+  for (const node of nodes) {
+    const t = node.data?.deviceType?.toLowerCase();
+    if (SWITCH_TYPES.has(t)) {
+      tables[node.id] = buildCAMTable(node, edges, nodes, macMap);
+    }
+  }
+  return tables;
+}
+
+/**
+ * Look up which port a MAC is reachable on for a given switch.
+ * Returns the entry ({ port, neighborId, label }) or null if unknown.
+ * Unknown MAC → switch floods to all ports (standard behavior).
+ */
+export function camLookup(mac, camTable) {
+  return camTable.get(mac) ?? null;
+}
+
+
+// ── 6. DNS ────────────────────────────────────────────────────────────────────
 
 export function deriveHostname(node) {
   return (node.data?.label || node.id)
@@ -148,7 +262,7 @@ export function deriveHostname(node) {
 }
 
 export function buildDNSTable(nodes, ipMap) {
-  const dns = new Map(); // hostname → IP
+  const dns = new Map();
   for (const node of nodes) {
     const ip = ipMap[node.id];
     if (!ip) continue;
@@ -169,9 +283,7 @@ export function dnsReverse(ip, dnsTable) {
 }
 
 
-// ── 6. VLAN ───────────────────────────────────────────────────────────────────
-//  Each node carries node.data.vlan (integer).  Untagged = VLAN 1 (default).
-//  Devices on different VLANs cannot communicate without a Layer-3 router.
+// ── 7. VLAN ───────────────────────────────────────────────────────────────────
 
 export function getVLAN(node) {
   return node.data?.vlan ?? 1;
@@ -189,44 +301,25 @@ export function getAllVLANs(nodes) {
   return [...new Set(nodes.map(n => getVLAN(n)))].sort((a, b) => a - b);
 }
 
-/**
- * Can nodeA reach nodeB directly (L2)?
- * Returns false if they're on different VLANs and no router bridges them.
- * Pass the full node list so we can check for intervening routers.
- */
 export function canReachL2(nodeA, nodeB) {
   return sameVLAN(nodeA, nodeB);
 }
 
 
-// ── 7. ROUTING TABLE ─────────────────────────────────────────────────────────
-//  Per-router static routes.  Uses longest-prefix matching.
-//  routingTables: { [routerId]: Route[] }
-//
-//  Route shape:
-//    { network, mask, nextHop, iface, metric }
-//    nextHop = '0.0.0.0' means directly connected.
+// ── 8. ROUTING TABLE ─────────────────────────────────────────────────────────
 
 export function createRoute(network, mask, nextHop = '0.0.0.0', iface = 'eth0', metric = 1) {
   return { network, mask, nextHop, iface, metric };
 }
 
-/**
- * Default routing table for a router node.
- * Adds a directly-connected route for its subnet + a default gateway stub.
- */
 export function defaultRoutingTable(routerIP, mask = '255.255.255.0') {
   const network = applyMask(routerIP, mask);
   return [
-    createRoute(network, mask, '0.0.0.0', 'eth0', 1),            // directly connected
-    createRoute('0.0.0.0', '0.0.0.0', routerIP, 'eth0', 100),   // default route (stub)
+    createRoute(network, mask, '0.0.0.0', 'eth0', 1),
+    createRoute('0.0.0.0', '0.0.0.0', routerIP, 'eth0', 100),
   ];
 }
 
-/**
- * Longest-prefix match on a routing table.
- * Returns the best matching Route or null (no route to host).
- */
 export function lookupRoute(destIP, routingTable) {
   if (!Array.isArray(routingTable) || routingTable.length === 0) return null;
 
@@ -258,8 +351,7 @@ export function applyMask(ip, mask) {
 }
 
 
-// ── 8. PROTOCOL / PACKET TAGGING ─────────────────────────────────────────────
-//  Used by Phase 4 packet capture to label simulated traffic.
+// ── 9. PROTOCOL / PACKET TAGGING ─────────────────────────────────────────────
 
 export const PROTOCOLS = {
   ICMP:  { name: 'ICMP',  layer: 3, color: '#60a5fa' },
@@ -276,72 +368,54 @@ export const PROTOCOLS = {
 let _packetSeq = 0;
 
 export function tagPacket({
-  protocol,
-  srcIP,
-  dstIP,
-  srcMAC = null,
-  dstMAC = null,
-  srcPort = null,
-  dstPort = null,
-  payload = '',
-  ttl = 64,
+  protocol, srcIP, dstIP,
+  srcMAC = null, dstMAC = null,
+  srcPort = null, dstPort = null,
+  payload = '', ttl = 64,
 }) {
   return {
     seq:      ++_packetSeq,
     protocol: PROTOCOLS[protocol] ?? { name: protocol, layer: 3, color: '#94a3b8' },
-    srcIP,
-    dstIP,
-    srcMAC,
-    dstMAC,
-    srcPort,
-    dstPort,
-    payload,
-    ttl,
+    srcIP, dstIP, srcMAC, dstMAC, srcPort, dstPort, payload, ttl,
     timestamp: Date.now(),
   };
 }
 
-export function resetPacketSeq() {
-  _packetSeq = 0;
-}
+export function resetPacketSeq() { _packetSeq = 0; }
 
 
-// ── 9. STP — SPANNING TREE PROTOCOL ─────────────────────────────────────────
-//  Prevents broadcast storms in topologies with loops.
-//  Algorithm: BFS from root bridge (switch with lexicographically lowest MAC).
-//  Returns { rootId, blockedEdges: Set<edgeId> }
+// ── 10. STP — SPANNING TREE PROTOCOL ─────────────────────────────────────────
 
 export function runSTP(nodes, edges) {
   const switches = nodes.filter(n =>
-    ['switch', 'managedswitch'].includes(n.data?.deviceType?.toLowerCase())
+    SWITCH_TYPES.has(n.data?.deviceType?.toLowerCase())
   );
 
   if (switches.length === 0) return { rootId: null, blockedEdges: new Set() };
 
-  // Root bridge = switch with lowest MAC (deterministic)
   const root = switches.reduce((best, sw) =>
     generateMAC(sw.id) < generateMAC(best.id) ? sw : best
   );
 
-  const visited    = new Set([root.id]);
-  const queue      = [root.id];
-  const treeEdgeIds = new Set();
+  const visited      = new Set([root.id]);
+  const queue        = [root.id];
+  const treeEdgeIds  = new Set();
   const blockedEdges = new Set();
 
   while (queue.length > 0) {
-    const current = queue.shift();
+    const current  = queue.shift();
     const adjacent = edges.filter(e => e.source === current || e.target === current);
 
     for (const edge of adjacent) {
       const neighbor = edge.source === current ? edge.target : edge.source;
-      if (!switches.find(s => s.id === neighbor)) continue; // only switch–switch links
+      if (!switches.find(s => s.id === neighbor)) continue;
 
       if (!visited.has(neighbor)) {
         visited.add(neighbor);
         queue.push(neighbor);
         treeEdgeIds.add(edge.id);
       } else if (!treeEdgeIds.has(edge.id)) {
-        blockedEdges.add(edge.id);   // redundant link → block it
+        blockedEdges.add(edge.id);
       }
     }
   }
@@ -350,14 +424,11 @@ export function runSTP(nodes, edges) {
 }
 
 
-// ── 10. NETWORK STATE INITIALIZER ────────────────────────────────────────────
-//  Single entry point: call this whenever the topology changes.
-//  Returns a complete networkState object consumed by the rest of the app.
-//
-//  Options:
-//    subnet    — first three octets for DHCP pool  (default '192.168.1')
-//    dhcpStart — first assignable host octet       (default 100)
-//    dhcpEnd   — last assignable host octet        (default 200)
+// ── 11. NETWORK STATE INITIALIZER ────────────────────────────────────────────
+//  Single entry point — call whenever topology changes.
+//  Now includes:
+//    camTables  — per-switch CAM tables  (MAC → port)
+//    arpCaches  — per-device ARP caches  (IP  → MAC, neighbors only)
 
 export function initNetworkState(nodes, edges, options = {}) {
   const dhcpState = createDHCPState(
@@ -374,12 +445,13 @@ export function initNetworkState(nodes, edges, options = {}) {
     ipMap[node.id]  = assignIP(node, dhcpState);
   }
 
-  const arpTable  = buildARPTable(nodes, ipMap);
+  const arpTable  = buildARPTable(nodes, ipMap);       // global (ping / pathfinder)
+  const arpCaches = buildAllARPCaches(nodes, edges, ipMap, macMap); // per-device
+  const camTables = buildAllCAMTables(nodes, edges, macMap);        // Switch only
   const dnsTable  = buildDNSTable(nodes, ipMap);
   const stpResult = runSTP(nodes, edges);
   const vlans     = getAllVLANs(nodes);
 
-  // Seed default routing tables for router/firewall nodes
   const routingTables = {};
   for (const node of nodes) {
     const t = node.data?.deviceType?.toLowerCase();
@@ -393,7 +465,9 @@ export function initNetworkState(nodes, edges, options = {}) {
     ipMap,
     macMap,
     dhcpState,
-    arpTable,
+    arpTable,      // global IP→MAC (used by existing ping)
+    arpCaches,     // per-device IP→MAC (Phase 4 packet capture, ping v2)
+    camTables,     // per-switch MAC→port (Phase 4 frame forwarding simulation)
     dnsTable,
     stpResult,
     vlans,

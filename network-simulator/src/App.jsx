@@ -123,10 +123,6 @@ function App() {
     if (!sourceNode || !targetNode) return
 
     const rule = checkConnection(sourceNode.data.deviceType, targetNode.data.deviceType)
-    console.log('source type:', sourceNode.data.deviceType)
-    console.log('target type:', targetNode.data.deviceType)
-    console.log('rule:',rule)
-    console.log('sourceNode.data:',sourceNode.data)
 
     if (rule.status === 'block') {
       setToast({type: 'block', message: rule.message})
@@ -135,6 +131,7 @@ function App() {
     if (rule.status === 'warn') {
       setToast({type: 'warn', message: rule.message})
     }
+    setPendingConnection(params)
   },[nodes]
   )
 
@@ -158,7 +155,7 @@ function App() {
         label: `${type} ${id}`,
         deviceType: type,
         ip: '',
-        ...(type === 'Server' ? { ports: [], ipMode: 'static' } : {}),
+        ...(['Server', 'PC'].includes(type) ? {ports: [], ipMode: type === 'Server' ? 'static' : 'dhcp' } : {}),
       },
       position: {x: Math.random()*400+100, y: Math.random() * 300 + 100}, 
     }

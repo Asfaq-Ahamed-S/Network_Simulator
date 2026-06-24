@@ -263,7 +263,14 @@ function App() {
       </div>
 
       {selectedNode && !pingMode && (
-        <PropertiesPanel node={selectedNode} onClose={()=> setSelectedNode(null)} onUpdate={handleUpdateNode} networkState={networkState} />
+        <PropertiesPanel
+        node={selectedNode}
+        onClose={()=> setSelectedNode(null)}
+        onUpdate={handleUpdateNode}
+        networkState={networkState}
+        edges={edges}
+        nodes={nodes}
+        />
       )}
 
       {pendingConnection && (

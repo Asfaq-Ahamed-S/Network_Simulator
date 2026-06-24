@@ -511,9 +511,228 @@ function RoutingTable({ routes = [], interfaces = [], onChange }) {
   )
 }
 
+// ── VLANConfig ───────────────────────────────────────────────
+
+function VLANConfig({ node, edges, nodes, onUpdate }) {
+  const [newVlanId, setNewVlanId] = useState('');
+  const [newVlanName, setNewVlanName] = useState('');
+
+  const vlans = node.data.vlans || [];
+  const portConfig = node.data.portConfig || {};
+
+  // Ports derived from actual topology — NOT manually typed
+  const connectedEdges = edges.filter(
+    e => e.source === node.id || e.target === node.id
+  );
+
+  const getNeighborLabel = (edge) => {
+    const neighborId = edge.source === node.id ? edge.target : edge.source;
+    const neighbor = nodes.find(n => n.id === neighborId);
+    return neighbor?.data?.label || `Node ${neighborId}`;
+  };
+
+  const addVlan = () => {
+    const id = parseInt(newVlanId);
+    if (!id || id < 1 || id > 4094) return;
+    if (vlans.find(v => v.id === id)) return;
+    onUpdate({ vlans: [...vlans, { id, name: newVlanName.trim() || `VLAN${id}` }] });
+    setNewVlanId('');
+    setNewVlanName('');
+  };
+
+  const removeVlan = (vlanId) => {
+    onUpdate({ vlans: vlans.filter(v => v.id !== vlanId) });
+  };
+
+  const getPortCfg = (edgeId) =>
+    portConfig[edgeId] || { mode: 'access', vlan: vlans[0]?.id ?? null, allowedVlans: [] };
+
+  const updatePort = (edgeId, changes) => {
+    onUpdate({
+      portConfig: {
+        ...portConfig,
+        [edgeId]: { ...getPortCfg(edgeId), ...changes },
+      },
+    });
+  };
+
+  const toggleTrunkVlan = (edgeId, vlanId, checked) => {
+    const cfg = getPortCfg(edgeId);
+    const current = cfg.allowedVlans || [];
+    const updated = checked
+      ? [...current, vlanId]
+      : current.filter(id => id !== vlanId);
+    updatePort(edgeId, { allowedVlans: updated });
+  };
+
+  return (
+    <div className="space-y-4">
+
+      {/* ── VLAN List ── */}
+      <div>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+          VLANs Defined
+        </p>
+
+        {vlans.length === 0 && (
+          <p className="text-xs text-gray-500 italic mb-2">No VLANs defined.</p>
+        )}
+
+        <div className="space-y-1 mb-3">
+          {vlans.map(v => (
+            <div
+              key={v.id}
+              className="flex items-center justify-between bg-gray-800 px-3 py-1.5 rounded text-sm"
+            >
+              <span className="text-cyan-400 font-mono w-16">VLAN {v.id}</span>
+              <span className="text-gray-300 flex-1">{v.name}</span>
+              <button
+                onClick={() => removeVlan(v.id)}
+                className="text-red-400 hover:text-red-300 text-xs ml-2"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Add VLAN row */}
+        <div className="flex gap-2">
+          <input
+            type="number"
+            min="1"
+            max="4094"
+            placeholder="ID"
+            value={newVlanId}
+            onChange={e => setNewVlanId(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addVlan()}
+            className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-500"
+          />
+          <input
+            type="text"
+            placeholder="Name (optional)"
+            value={newVlanName}
+            onChange={e => setNewVlanName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addVlan()}
+            className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-cyan-500"
+          />
+          <button
+            onClick={addVlan}
+            className="bg-cyan-700 hover:bg-cyan-600 text-white text-xs px-3 py-1 rounded"
+          >
+            Add
+          </button>
+        </div>
+      </div>
+
+      {/* ── Port Configuration ── */}
+      <div>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+          Port Configuration
+        </p>
+
+        {connectedEdges.length === 0 ? (
+          <p className="text-xs text-gray-500 italic">
+            No connected ports — draw connections first.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {connectedEdges.map(edge => {
+              const cfg = getPortCfg(edge.id);
+              return (
+                <div
+                  key={edge.id}
+                  className="bg-gray-800 rounded p-3 border border-gray-700 space-y-2"
+                >
+                  {/* Port header: neighbor label + mode selector */}
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-300 font-mono truncate">
+                      ⇒ {getNeighborLabel(edge)}
+                    </span>
+                    <select
+                      value={cfg.mode}
+                      onChange={e =>
+                        updatePort(edge.id, {
+                          mode: e.target.value,
+                          vlan: vlans[0]?.id ?? null,
+                          allowedVlans: [],
+                        })
+                      }
+                      className="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs text-white focus:outline-none ml-2"
+                    >
+                      <option value="access">Access</option>
+                      <option value="trunk">Trunk</option>
+                    </select>
+                  </div>
+
+                  {/* Access mode: single VLAN dropdown */}
+                  {cfg.mode === 'access' && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">VLAN:</span>
+                      {vlans.length === 0 ? (
+                        <span className="text-xs text-yellow-500 italic">
+                          Define a VLAN above first
+                        </span>
+                      ) : (
+                        <select
+                          value={cfg.vlan ?? ''}
+                          onChange={e =>
+                            updatePort(edge.id, { vlan: parseInt(e.target.value) })
+                          }
+                          className="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs text-white focus:outline-none"
+                        >
+                          {vlans.map(v => (
+                            <option key={v.id} value={v.id}>
+                              {v.id} — {v.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Trunk mode: allowed VLANs checkboxes */}
+                  {cfg.mode === 'trunk' && (
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Allowed VLANs:</p>
+                      {vlans.length === 0 ? (
+                        <span className="text-xs text-yellow-500 italic">
+                          Define VLANs above first
+                        </span>
+                      ) : (
+                        <div className="flex flex-wrap gap-3">
+                          {vlans.map(v => (
+                            <label
+                              key={v.id}
+                              className="flex items-center gap-1 text-xs text-gray-300 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={(cfg.allowedVlans || []).includes(v.id)}
+                                onChange={e =>
+                                  toggleTrunkVlan(edge.id, v.id, e.target.checked)
+                                }
+                                className="accent-cyan-500"
+                              />
+                              VLAN {v.id}
+                            </label>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ── Main Component ───────────────────────────────────────────────
-export default function PropertiesPanel({ node, onUpdate, onClose }) {
+export default function PropertiesPanel({ node, onUpdate, onClose, networkState, edges = [], nodes = [] }) {
   if (!node) return null;
 
   const data = node.data;
@@ -641,6 +860,19 @@ export default function PropertiesPanel({ node, onUpdate, onClose }) {
             <p className="text-xs text-gray-400 leading-relaxed">
               Layer 2 device. Forwards Ethernet frames using MAC address tables. Does not route between subnets.
             </p>
+          </div>
+          <div className="mt-4">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+              VLAN Configuration
+            </p>
+            <VLANConfig
+              node={node}
+              edges={edges}
+              nodes={nodes}
+              onUpdate={(changes)=> {
+                Object.entries(changes).forEach(([k, v]) => set(k, v));
+              }}
+            />
           </div>
         </>)}
 

@@ -64,57 +64,152 @@ function App() {
   useEffect(()=> {
     const state = initNetworkState(nodes, edges)
     setNetworkState(state)
-    console.log('networkState:', state)
   },[nodes, edges])
 
-  const executePing = useCallback((source, target) => {
-    const path = findPath(nodes, edges, source.id, target.id)
-    const targetLabel = target.data.ip || target.data.label
+const executePing = useCallback((source, target) => {
+  const path = findPath(nodes, edges, source.id, target.id)
+  const targetLabel = target.data.ip || target.data.label
+  const srcIp = source.data.ip || ''
+  const dstIp = target.data.ip || ''
 
-    setPingLogs(prev => [
-      ...prev,
-      {type: 'info', text: `Target: ${target.data.label}${target.data.ip ? `(${target.data.ip})` : ''}`},
-      {type: 'gray', text: `Pinging ${targetLabel} with 32 bytes of data:` },
-    ])
+  setPingLogs(prev => [
+    ...prev,
+    { type: 'info', text: `Target: ${target.data.label}${target.data.ip ? ` (${target.data.ip})` : ''}` },
+    { type: 'gray', text: `Pinging ${targetLabel} with 32 bytes of data:` },
+  ])
 
-    if (!path) {
+  if (!path) {
+    setTimeout(() => setPingLogs(prev => [...prev,
+      { type: 'error', text: 'Request timed out.' },
+      { type: 'error', text: 'Request timed out.' },
+      { type: 'error', text: 'Request timed out.' },
+      { type: 'gray',  text: '' },
+      { type: 'error', text: `Ping statistics for ${targetLabel}:` },
+      { type: 'error', text: '     Packets: Sent = 3, Received = 0, Lost = 3 (100% loss)' },
+    ]), 1000)
+    return
+  }
+
+  // ── Build ordered path node list from path edges ──
+  const pathNodeIds = []
+  path.forEach(edge => {
+    if (!pathNodeIds.includes(edge.source)) pathNodeIds.push(edge.source)
+    if (!pathNodeIds.includes(edge.target)) pathNodeIds.push(edge.target)
+  })
+  const pathNodes = pathNodeIds
+    .map(id => nodes.find(n => n.id === id))
+    .filter(Boolean)
+
+  // ── VLAN Enforcement ──
+  const hasRouter = pathNodes.some(
+    n => n.data.deviceType?.toLowerCase() === 'router'
+  )
+
+  for (const sw of pathNodes.filter(n => n.data.deviceType?.toLowerCase() === 'switch')) {
+    const portConfig = sw.data.portConfig || {}
+    const swEdges = path.filter(e => e.source === sw.id || e.target === sw.id)
+
+    // Collect VLANs of access-mode ports only (trunk passes everything)
+    const portVlans = swEdges
+      .map(e => {
+        const cfg = portConfig[e.id] || {}
+        return cfg.mode === 'trunk' ? null : (cfg.vlan ?? null)
+      })
+      .filter(v => v !== null)
+
+    const uniqueVlans = [...new Set(portVlans)]
+    if (uniqueVlans.length > 1 && !hasRouter) {
       setTimeout(() => setPingLogs(prev => [...prev,
-        {type: 'error', text: 'Requested timed out.'},
-        {type: 'error', text: 'Requested timed out.'},
-        {type: 'error', text: 'Requested timed out.'},
-        {type: 'gray', text: ''},
-        {type: 'error', text: `Ping statistics for ${targetLabel}:`},
-        {type: 'error', text: '     Packets: Sent = 3, Recieved = 0, Lost = 3 (100% loss)'},
-      ]), 1000)
+        { type: 'error', text: `VLAN mismatch at ${sw.data.label}: traffic blocked (VLAN ${portVlans[0]} → VLAN ${portVlans[portVlans.length - 1]})` },
+        { type: 'error', text: 'Request timed out.' },
+        { type: 'error', text: 'Request timed out.' },
+        { type: 'error', text: 'Request timed out.' },
+        { type: 'gray',  text: '' },
+        { type: 'error', text: `Ping statistics for ${targetLabel}:` },
+        { type: 'error', text: '     Packets: Sent = 3, Received = 0, Lost = 3 (100% loss)' },
+      ]), 500)
       return
     }
+  }
 
-    const pathIds = path.map(e => e.id)
-    setAnimatingEdgeIds(pathIds)
+  // ── Firewall ACL Enforcement ──
+  const ipMatch = (ruleIp, packetIp) => {
+    if (!ruleIp || ruleIp === 'any' || ruleIp === '*') return true
+    if (!packetIp) return false
+    if (ruleIp === packetIp) return true
+    if (ruleIp.includes('/')) {
+      try {
+        const [network, prefixStr] = ruleIp.split('/')
+        const prefix = parseInt(prefixStr)
+        const mask = ~((1 << (32 - prefix)) - 1) >>> 0
+        const toInt = ip => ip.split('.').reduce((acc, o) => (acc << 8) + parseInt(o), 0) >>> 0
+        return (toInt(network) & mask) === (toInt(packetIp) & mask)
+      } catch { return false }
+    }
+    return false
+  }
 
-    const r = () => Math.floor(Math.random()*6) + 1
-    const [t1, t2, t3] = [r(), r(), r()]
+  for (const fw of pathNodes.filter(n => n.data.deviceType?.toLowerCase() === 'firewall')) {
+    const rules = fw.data.rules || []
+    const defaultPolicy = fw.data.defaultPolicy || 'allow'
 
-    setTimeout(() => setPingLogs(prev => [...prev,
-      {type: 'success', text: `Reply from ${targetLabel}: bytes=32 time=${t1}ms TTL=128`}
-    ]),900)
-    setTimeout(() => setPingLogs(prev => [...prev,
-      {type: 'success', text: `Reply from ${targetLabel}: bytes=32 time=${t2}ms TTL=128`}
-    ]),1800)
-    setTimeout(() => setPingLogs(prev => [...prev,
-      {type: 'success', text: `Reply from ${targetLabel}: bytes=32 time=${t3}ms TTL=128`}
-    ]),2700)
-    setTimeout(()=>{
-      setPingLogs(prev => [...prev,
-        {type: 'gray', text: ''},
-        {type: 'gray', text: `Ping statistics for ${targetLabel}:`},
-        {type: 'gray', text: '    Packets: Sent = 3, Received = 3, Lost = 0 (0% loss)'},
-        {type: 'success', text: `Approximate round trip: min=${Math.min(t1,t2,t3)}ms max=${Math.max(t1,t2,t3)}ms avg=${Math.round((t1+t2+t3)/3)}ms`},
-      ])
-      setAnimatingEdgeIds([])
-      setPingSource(null)
-    }, 3500)
-  }, [nodes, edges])
+    let matched = false
+    let allowed = false
+
+    for (const rule of rules) {
+      const proto = rule.protocol?.toLowerCase()
+      if (proto && proto !== 'any' && proto !== 'icmp') continue
+      if (ipMatch(rule.src, srcIp) && ipMatch(rule.dst, dstIp)) {
+        matched = true
+        allowed = rule.action?.toLowerCase() === 'allow'
+        break
+      }
+    }
+
+    if (!matched) allowed = defaultPolicy === 'allow'
+
+    if (!allowed) {
+      setTimeout(() => setPingLogs(prev => [...prev,
+        { type: 'error', text: `Blocked by firewall: ${fw.data.label}` },
+        { type: 'error', text: `Rule: ${srcIp || 'any'} → ${dstIp || 'any'} [ICMP] — DENIED` },
+        { type: 'error', text: 'Request timed out.' },
+        { type: 'error', text: 'Request timed out.' },
+        { type: 'error', text: 'Request timed out.' },
+        { type: 'gray',  text: '' },
+        { type: 'error', text: `Ping statistics for ${targetLabel}:` },
+        { type: 'error', text: '     Packets: Sent = 3, Received = 0, Lost = 3 (100% loss)' },
+      ]), 500)
+      return
+    }
+  }
+
+  // ── All checks passed — animate and show replies ──
+  const pathIds = path.map(e => e.id)
+  setAnimatingEdgeIds(pathIds)
+
+  const r = () => Math.floor(Math.random() * 6) + 1
+  const [t1, t2, t3] = [r(), r(), r()]
+
+  setTimeout(() => setPingLogs(prev => [...prev,
+    { type: 'success', text: `Reply from ${targetLabel}: bytes=32 time=${t1}ms TTL=128` }
+  ]), 900)
+  setTimeout(() => setPingLogs(prev => [...prev,
+    { type: 'success', text: `Reply from ${targetLabel}: bytes=32 time=${t2}ms TTL=128` }
+  ]), 1800)
+  setTimeout(() => setPingLogs(prev => [...prev,
+    { type: 'success', text: `Reply from ${targetLabel}: bytes=32 time=${t3}ms TTL=128` }
+  ]), 2700)
+  setTimeout(() => {
+    setPingLogs(prev => [...prev,
+      { type: 'gray', text: '' },
+      { type: 'gray', text: `Ping statistics for ${targetLabel}:` },
+      { type: 'gray', text: '    Packets: Sent = 3, Received = 3, Lost = 0 (0% loss)' },
+      { type: 'success', text: `Approximate round trip: min=${Math.min(t1,t2,t3)}ms max=${Math.max(t1,t2,t3)}ms avg=${Math.round((t1+t2+t3)/3)}ms` },
+    ])
+    setAnimatingEdgeIds([])
+    setPingSource(null)
+  }, 3500)
+}, [nodes, edges])
 
   const onConnect = useCallback((params) => {
     const sourceNode = nodes.find(n => n.id === params.source)

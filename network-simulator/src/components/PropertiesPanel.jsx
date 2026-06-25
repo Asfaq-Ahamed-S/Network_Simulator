@@ -545,7 +545,7 @@ function VLANConfig({ node, edges, nodes, onUpdate }) {
   };
 
   const getPortCfg = (edgeId) =>
-    portConfig[edgeId] || { mode: 'access', vlan: vlans[0]?.id ?? null, allowedVlans: [] };
+    portConfig[edgeId] || { mode: 'access', vlan: null, allowedVlans: [] };
 
   const updatePort = (edgeId, changes) => {
     onUpdate({
@@ -677,10 +677,11 @@ function VLANConfig({ node, edges, nodes, onUpdate }) {
                         <select
                           value={cfg.vlan ?? ''}
                           onChange={e =>
-                            updatePort(edge.id, { vlan: parseInt(e.target.value) })
+                            updatePort(edge.id, { vlan: e.target.value ? parseInt(e.target.value) : null })
                           }
                           className="bg-gray-700 border border-gray-600 rounded px-2 py-0.5 text-xs text-white focus:outline-none"
-                        >
+                        > 
+                          <option value="">--none--</option>
                           {vlans.map(v => (
                             <option key={v.id} value={v.id}>
                               {v.id} — {v.name}

@@ -159,7 +159,7 @@ const executePing = useCallback((source, target) => {
     for (const rule of rules) {
       const proto = rule.protocol?.toLowerCase()
       if (proto && proto !== 'any' && proto !== 'icmp') continue
-      if (ipMatch(rule.src, srcIp) && ipMatch(rule.dst, dstIp)) {
+      if (ipMatch(rule.srcIp, srcIp) && ipMatch(rule.dstIp, dstIp)) {
         matched = true
         allowed = rule.action?.toLowerCase() === 'allow'
         break

@@ -26,13 +26,20 @@ const TAG_LABEL = {
 };
 
 // ── Firewall ACL Editor ──────────────────────────────────────────
-function FirewallACL({ rules = [], defaultPolicy = "deny", onRules, onPolicy }) {
+function FirewallACL({ rules = [], defaultPolicy = "allow", onRules, onPolicy }) {
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ srcIp: "any", dstIp: "any", port: "any", protocol: "TCP", action: "ALLOW" });
+  const [form, setForm] = useState({ srcIp: "", dstIp: "", port: "", protocol: "TCP", action: "ALLOW" });
 
   const add = () => {
-    onRules([...rules, { ...form, id: Date.now() }]);
-    setForm({ srcIp: "any", dstIp: "any", port: "any", protocol: "TCP", action: "ALLOW" });
+    onRules([...rules, {
+      id: Date.now(),
+      srcIp: form.srcIp.trim() || "any",
+      dstIp: form.dstIp.trim() || "any",
+      port: form.port.trim() || "any",
+      protocol: form.protocol,
+      action: form.action,
+    }]);
+    setForm({ srcIp: "", dstIp: "", port: "", protocol: "TCP", action: "ALLOW" });
     setOpen(false);
   };
 
@@ -84,24 +91,24 @@ function FirewallACL({ rules = [], defaultPolicy = "deny", onRules, onPolicy }) 
 
         {open && (
           <div className="bg-gray-800 border border-gray-600 rounded p-2 space-y-2 mt-1">
-            <div className="flex gap-1">
-              <input type="text" placeholder="Src IP (any)" value={form.srcIp}
+            <div className="grid grid-cols-2 gap-1">
+              <input type="text" placeholder="Src IP" value={form.srcIp}
                 onChange={(e) => setForm({ ...form, srcIp: e.target.value })}
-                className="flex-1 bg-gray-700 border border-gray-600 text-white text-xs rounded px-2 py-1" />
-              <input type="text" placeholder="Dst IP (any)" value={form.dstIp}
+                className="w-full bg-gray-700 border border-gray-600 text-white text-xs rounded px-2 py-1" />
+              <input type="text" placeholder="Dst IP" value={form.dstIp}
                 onChange={(e) => setForm({ ...form, dstIp: e.target.value })}
-                className="flex-1 bg-gray-700 border border-gray-600 text-white text-xs rounded px-2 py-1" />
+                className="w-full bg-gray-700 border border-gray-600 text-white text-xs rounded px-2 py-1" />
             </div>
-            <div className="flex gap-1">
-              <input type="text" placeholder="Port (any/80)" value={form.port}
+            <div className="grid grid-cols-3 gap-1">
+              <input type="text" placeholder="Port" value={form.port}
                 onChange={(e) => setForm({ ...form, port: e.target.value })}
-                className="flex-1 bg-gray-700 border border-gray-600 text-white text-xs rounded px-2 py-1" />
+                className="w-full bg-gray-700 border border-gray-600 text-white text-xs rounded px-2 py-1" />
               <select value={form.protocol} onChange={(e) => setForm({ ...form, protocol: e.target.value })}
-                className="bg-gray-700 border border-gray-600 text-white text-xs rounded px-1">
+                className="w-full bg-gray-700 border border-gray-600 text-white text-xs rounded px-1">
                 <option>TCP</option><option>UDP</option><option>ICMP</option><option>ANY</option>
               </select>
               <select value={form.action} onChange={(e) => setForm({ ...form, action: e.target.value })}
-                className="bg-gray-700 border border-gray-600 text-white text-xs rounded px-1">
+                className="w-full bg-gray-700 border border-gray-600 text-white text-xs rounded px-1">
                 <option value="ALLOW">ALLOW</option>
                 <option value="DENY">DENY</option>
               </select>
@@ -892,7 +899,7 @@ export default function PropertiesPanel({ node, onUpdate, onClose, networkState,
           <div className={sect}>
             <FirewallACL
               rules={data.rules || []}
-              defaultPolicy={data.defaultPolicy || "deny"}
+              defaultPolicy={data.defaultPolicy || "allow"}
               onRules={(v) => set("rules", v)}
               onPolicy={(v) => set("defaultPolicy", v)}
             />
